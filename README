@@ -1,1 +1,4 @@
 Client library for Affinity in ruby
+
+Note: Incomplete (protobuf transactions not yet implemented)
+
