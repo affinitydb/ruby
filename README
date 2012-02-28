@@ -1,4 +1,8 @@
 Client library for Affinity in ruby
 
-Note: Incomplete (protobuf transactions not yet implemented)
+For more information please visit http://affinitydb.org.
+
+Note: 
+  This library is not yet complete 
+  (protobuf transactions not yet implemented).
 
