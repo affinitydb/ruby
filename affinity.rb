@@ -1252,17 +1252,11 @@ module Affinity
           raise
         end
       end
-      def PBTransactionCtx._queryPBOut(pQstr)
-        # This version borrows the current connection to request directly from the server a protobuf response (i.e. pathSQL in & protobuf out; for debugging etc.).
+      def PBTransactionCtx._queryPBOut(pQstr) Connection.getCurrentDbConnection()._getProto("/db?q=#{CGI::escape(pQstr)}&i=pathsql&o=proto", nil) end
+      def _queryPB2(pQstr)
         logger.info("pathSQL (in protobuf): #{pQstr}")
-        lRaw = Connection.getCurrentDbConnection().q(pQstr)
-        if lRaw.nil?
-          return nil
-        end
-        #puts "response obtained from Affinity for _queryPB: #{PBTransactionCtx._parsePBStr(lRaw).inspect}"
-        PBTransactionCtx._parsePBStr(lRaw)
+        return PBTransactionCtx._queryPBOut(pQstr)
       end
-      def _queryPB2(pQstr) return PBTransactionCtx._queryPBOut(pQstr) end
       alias queryPB _queryPB2 # TODO: switch to _queryPB1 when it's glitchless... (right now it's still buggier somehow).
       # ---
       # Accumulation of PIN updates.
@@ -1361,7 +1355,7 @@ module Affinity
     def keptAlive() true end # Presently, the ruby flavor always uses keep-alive.
     def q(qstr, options=nil) _getJson("/db?q=#{CGI::escape(qstr)}&i=pathsql&o=json", options) end
     def qCount(qstr) r = _getRaw("/db?q=#{CGI::escape(qstr)}&i=pathsql&o=json&type=count"); if r.nil? then 0 else r.to_i end; end
-    def qProto(qstr, options=nil) _getProto("/db?q=#{CGI::escape(qstr)}&i=pathsql&o=proto", options) end
+    def qProto(qstr, options=nil) if @txCtx.nil? then _getProto("/db?q=#{CGI::escape(qstr)}&i=pathsql&o=proto", options) else @txCtx.queryPB(qstr) end; end
     def createPINs(descriptions) PIN.savePINs(descriptions) end
     def startTx(txLabel=nil) _txCtx().startTx(txLabel) end
     def commitTx() _txCtx().commitTx() end
@@ -1455,11 +1449,13 @@ module Affinity
       req['Content-Type'] = "application/octet-stream"
       req['Authorization'] = "Basic #{Base64.encode64("#{@owner}:#{@pw}")}"
       # From Net::HTTP.request... we dissect one HTTP request to stream in/out the protobuf segments and their responses.
-      # longHttp.send(:begin_transport, req)
-      # sock = longHttp.instance_variable_get :@socket
-      # ver = longHttp.instance_variable_get :@curr_http_version
-      # req.send(:supply_default_content_type)
-      # req.send(:write_header, sock, ver, req.path)
+      # puts "about to begin_transport..."
+      # STDIN.getc
+      longHttp.send(:begin_transport, req)
+      sock = longHttp.instance_variable_get :@socket
+      ver = longHttp.instance_variable_get :@curr_http_version
+      req.send(:write_header, sock, ver, req.path)
+      sock.io.fcntl(Fcntl::F_SETFL, sock.io.fcntl(Fcntl::F_GETFL) | Fcntl::O_NONBLOCK)
       [longHttp, req]
     end
 
@@ -1467,40 +1463,52 @@ module Affinity
       @logger.debug("sending protobuf message");
       res = nil
       begin
-        lpToken[1].body = msg
-        res = lpToken[0].request(lpToken[1])
-        # sock = lpToken[0].instance_variable_get :@socket
-        # io = sock.instance_variable_get :@io
-        # io.fcntl(Fcntl::F_SETFL, io.fcntl(Fcntl::F_GETFL) | Fcntl::O_NONBLOCK)
-        #                                       #sock.write msg
-        # wrote = io.syswrite msg
-        # puts "wrote #{wrote}"
-        # if 2 == lpToken.length
-        #   lpToken << Net::HTTPResponse.read_new(sock)
-        #                                       #sock.instance_variable_set :@read_timeout, 1
-        #                                       #lpToken[2].instance_variable_set :@socket, sock
-        #                                       #lpToken[2].instance_variable_set :@body_exist, true
-        # end
-        #                                       ##res = lpToken[2].reading_body(sock, true) {}
-        # puts "about to io.read"
-        # io = sock.instance_variable_get :@io
-        # io.fcntl(Fcntl::F_SETFL, io.fcntl(Fcntl::F_GETFL) | Fcntl::O_NONBLOCK)
-        # res = io.readpartial 4096
-        #                                       # puts "about to rbuf_consume"
-        #                                       # rbuf = sock.instance_variable_get :@rbuf
-        #                                       # read = rbuf.size
-        #                                       # res = sock.send(:rbuf_consume, read)
-        #                                       #lpToken[2].instance_variable_set :@read, false
-        # @logger.warn("done reading segment: obtained #{res.length} bytes")
+        # Retrieve the raw socket handle.
+        sock = lpToken[0].instance_variable_get :@socket
+        io = sock.io
+
+        # Read the basic response (HTTP_OK etc.), if pending.
+        if 2 == lpToken.length
+          lpToken << Net::HTTPResponse.read_new(sock)
+          @logger.debug("obtained basic response: #{lpToken[2].inspect} expectOutput:#{expectOutput}")
+        end
+
+        # Send the msg segment.
+        wrote = io.syswrite msg
+        @logger.debug("wrote #{wrote} bytes")
+
+        # Read the response.
+        if expectOutput
+          _safeioread = lambda\
+          {
+            |logexcpt|
+            begin
+              _r = io.sysread 4096
+            rescue => ex
+              @logger.debug("exception during io.sysread: #{ex.inspect}") if logexcpt
+              sleep(0.01)
+            end
+            _r
+          }
+          while res.nil? do
+            res = _safeioread.call(true)
+          end
+          res1 = _safeioread.call(false)
+          until res1.nil? do
+            res += res1
+            res1 = _safeioread.call(false)
+          end
+        end
+        @logger.warn("done reading segment: obtained #{if res.nil? then 0 else res.length end} bytes")
       rescue => ex
         @logger.warn("Exception #{ex}: #{ex.backtrace}")
       end
-      res
+      [0, res]
     end
 
     def _endlongpost(lpToken)
-      # lpToken[2].instance_variable_set :@read, true if lpToken.length > 2
-      # lpToken[0].send(:end_transport, lpToken[1], lpToken[2])
+      lpToken[2].instance_variable_set :@read, true if lpToken.length > 2
+      lpToken[0].send(:end_transport, lpToken[1], lpToken[2])
       lpToken[0].finish
     end
 

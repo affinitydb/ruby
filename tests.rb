@@ -306,18 +306,23 @@ Affinity::Connection.open({:host=>"localhost", :port=>4560, :owner=>"rubytests",
       :func => lambda\
       {
         lAffinity.startTx
-        puts "newpin: #{lAffinity.createPINs([Affinity::PIN[{:test_tx_simple_write=>"kept"}]]).inspect}"
+        puts "newpin: #{lAffinity.createPINs([Affinity::PIN[{:test_tx_simple_write=>"kept1"}]]).inspect}"
         lAffinity.commitTx
 
+        # bugzilla #307...
+        #lAffinity.startTx
+        #puts "newpin: #{lAffinity.createPINs([Affinity::PIN[{:test_tx_simple_write=>"dropped"}]]).inspect}"
+        #lAffinity.rollbackTx
+
         lAffinity.startTx
-        puts "newpin: #{lAffinity.createPINs([Affinity::PIN[{:test_tx_simple_write=>"dropped"}]]).inspect}"
-        lAffinity.rollbackTx
+        puts "newpin: #{lAffinity.createPINs([Affinity::PIN[{:test_tx_simple_write=>"kept2"}]]).inspect}"
+        lAffinity.commitTx
 
         lAffinity.startTx
         lCnt = 0
         Affinity::PIN.loadPINs(lAffinity.qProto("SELECT WHERE EXISTS(test_tx_simple_write);")).each do |pin|
-          raise "Failure" if pin["test_tx_simple_write"] == "dropped"
           puts "result: #{pin.inspect}"
+          raise "Failure" if pin["test_tx_simple_write"] == "dropped"
           lCnt += 1
         end
         lAffinity.commitTx
