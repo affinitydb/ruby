@@ -1,4 +1,4 @@
-# Copyright (c) 2004-2012 VMware, Inc. All Rights Reserved.
+# Copyright (c) 2004-2013 GoPivotal, Inc. All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License");
 #    you may not use this file except in compliance with the License.
@@ -61,6 +61,7 @@ Affinity::Connection.open({:host=>"localhost", :port=>4560, :owner=>"rubytests",
         lPINs[0].store("test_basic_protobuf__y", 303030)
         lPINs[0]["test_basic_protobuf__an_array"] << 5
         lAffinity.commitTx
+        sleep(1) # temporary patch related to bug #347...
         lR2 = Affinity::PIN.loadPINs(lAffinity.qProto "SELECT WHERE EXISTS(test_basic_protobuf__an_array);")
         puts "retrieved #{lR2.inspect}"
         raise "Failure to push element" unless 5 == lR2[0]["test_basic_protobuf__an_array"].length
@@ -465,14 +466,14 @@ Affinity::Connection.open({:host=>"localhost", :port=>4560, :owner=>"rubytests",
 
         # VT_REFIDPROP
         lValue = Affinity::PIN::Ref.new(lReferenced1.pid.localPID, lReferenced1.pid.ident, 'http://localhost/afy/property/testtypes1/value1')
-        lPin = Affinity::PIN.loadPINs(lAffinity.qProto("INSERT (\"http://localhost/afy/property/testtypes1/value1\") VALUES (#{lReferenced1.pid}.\"http://localhost/afy/property/testtypes1/value1\");"))[0]
+        lPin = Affinity::PIN.loadPINs(lAffinity.qProto("INSERT (\"http://localhost/afy/property/testtypes1/value1\") VALUES (&#{lReferenced1.pid}.\"http://localhost/afy/property/testtypes1/value1\");"))[0]
         lPin['http://localhost/afy/property/testtypes1/value2'] = lValue
         lPin.refreshPIN
         lCheck.call(lPin, lValue, AffinityPB::Value::ValueType::VT_REFIDPROP)
 
         # VT_REFIDELT
         lValue = Affinity::PIN::Ref.new(lReferenced1.pid.localPID, lReferenced1.pid.ident, 'http://localhost/afy/property/testtypes1/value1', lReferenced1.extras['http://localhost/afy/property/testtypes1/value1'][1].eid)
-        lPin = Affinity::PIN.loadPINs(lAffinity.qProto("INSERT (\"http://localhost/afy/property/testtypes1/value1\") VALUES (#{lReferenced1.pid}.\"http://localhost/afy/property/testtypes1/value1\"[#{lValue.eid}]);"))[0]
+        lPin = Affinity::PIN.loadPINs(lAffinity.qProto("INSERT (\"http://localhost/afy/property/testtypes1/value1\") VALUES (&#{lReferenced1.pid}.\"http://localhost/afy/property/testtypes1/value1\"[#{lValue.eid}]);"))[0]
         lPin['http://localhost/afy/property/testtypes1/value2'] = lValue
         lPin.refreshPIN
         lCheck.call(lPin, lValue, AffinityPB::Value::ValueType::VT_REFIDELT)
@@ -503,7 +504,7 @@ Affinity::Connection.open({:host=>"localhost", :port=>4560, :owner=>"rubytests",
         end
         lAffinity.q "SET PREFIX myqnamec: 'http://localhost/afy/class/test_qnames/';"
         lAffinity.q "SET PREFIX myqnamep: 'http://localhost/afy/property/test_qnames/';"
-        if 0 == lAffinity.qCount("SELECT * FROM afy:ClassOfClasses WHERE BEGINS(afy:classID, 'http://localhost/afy/class/test_qnames/');")
+        if 0 == lAffinity.qCount("SELECT * FROM afy:Classes WHERE BEGINS(afy:objectID, 'http://localhost/afy/class/test_qnames/');")
           lAffinity.q "CREATE CLASS myqnamec:pos AS SELECT * WHERE EXISTS(myqnamep:x) AND EXISTS(myqnamep:y);"
         end
         lAffinity.q "INSERT (myqnamep:x, myqnamep:y) VALUES (#{rand()}, #{rand()});"
@@ -722,7 +723,7 @@ Affinity::Connection.open({:host=>"localhost", :port=>4560, :owner=>"rubytests",
         }
 
         # Run the scenario.
-        if 0 == lAffinity.qCount("SELECT * FROM afy:ClassOfClasses WHERE BEGINS(afy:classID, 'http://localhost/afy/class/testphotos1/');")
+        if 0 == lAffinity.qCount("SELECT * FROM afy:Classes WHERE BEGINS(afy:objectID, 'http://localhost/afy/class/testphotos1/');")
           puts "Creating classes."
           lAffinity.q("CREATE CLASS \"http://localhost/afy/class/testphotos1/photo\" AS SELECT * WHERE \"http://www.semanticdesktop.org/ontologies/2007/03/22/nfo#hasHash\" IN :0 AND EXISTS(\"http://www.w3.org/2001/XMLSchema#date\") AND EXISTS(\"http://www.w3.org/2001/XMLSchema#time\") AND EXISTS(\"http://www.semanticdesktop.org/ontologies/2007/03/22/nfo#fileUrl\") AND EXISTS (\"http://www.semanticdesktop.org/ontologies/2007/03/22/nfo#fileName\");")
           lAffinity.q("CREATE CLASS \"http://localhost/afy/class/testphotos1/tag\" AS SELECT * WHERE \"http://code.google.com/p/tagont/hasTagLabel\" in :0 AND NOT EXISTS(\"http://www.semanticdesktop.org/ontologies/2007/03/22/nfo#hasHash\") AND NOT EXISTS(\"http://code.google.com/p/tagont/hasVisibility\");")
@@ -846,7 +847,7 @@ end
     // Declaration of classes.
     var lClassesExist = false;
     var lOnSelectClasses = function(pError, pResponse) { console.log("substep " + lSS.curstep()); if (pError) console.log("\n*** ERROR: " + pError + "\n"); else { console.log("Result from step " + lSS.curstep() + ":" + JSON.stringify(pResponse)); lClassesExist = (pResponse && pResponse.length > 0); lSS.next(); } }
-    lSS.push(function() { console.log("Creating classes."); lAffinity.q("SELECT * FROM afy:ClassOfClasses WHERE BEGINS(afy:classID, 'http://localhost/afy/class/benchgraph1/');", lOnSelectClasses); });
+    lSS.push(function() { console.log("Creating classes."); lAffinity.q("SELECT * FROM afy:Classes WHERE BEGINS(afy:objectID, 'http://localhost/afy/class/benchgraph1/');", lOnSelectClasses); });
     lSS.push(function() { if (lClassesExist) lSS.next(); else lAffinity.q("CREATE CLASS \"http://localhost/afy/class/benchgraph1/orgid\" AS SELECT * WHERE \"http://localhost/afy/property/benchgraph1/orgid\" IN :0;", lSS.simpleOnResponse); });
     lSS.push(function() { if (lClassesExist) lSS.next(); else lAffinity.q("CREATE CLASS \"http://localhost/afy/class/benchgraph1/fid\" AS SELECT * WHERE \"http://localhost/afy/property/benchgraph1/fid\" in :0;", lSS.simpleOnResponse); });
 

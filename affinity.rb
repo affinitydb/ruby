@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-# Copyright (c) 2004-2012 VMware, Inc. All Rights Reserved.
+# Copyright (c) 2004-2013 GoPivotal, Inc. All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License");
 #    you may not use this file except in compliance with the License.
@@ -47,10 +47,9 @@ module Affinity
     AffinityPB::SpecProp::SP_ACL.value => "afy:ACL",
     AffinityPB::SpecProp::SP_URI.value => "afy:URI",
     AffinityPB::SpecProp::SP_STAMP.value => "afy:stamp",
-    AffinityPB::SpecProp::SP_CLASSID.value => "afy:classID",
+    AffinityPB::SpecProp::SP_OBJID.value => "afy:objectID",
     AffinityPB::SpecProp::SP_PREDICATE.value => "afy:predicate",
     AffinityPB::SpecProp::SP_NINSTANCES.value => "afy:nInstances",
-    AffinityPB::SpecProp::SP_NDINSTANCES.value => "afy:nDelInstances",
     AffinityPB::SpecProp::SP_SUBCLASSES.value => "afy:subclasses",
     AffinityPB::SpecProp::SP_SUPERCLASSES.value => "afy:superclasses",
     AffinityPB::SpecProp::SP_CLASS_INFO.value => "afy:classInfo",
