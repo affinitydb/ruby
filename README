@@ -1,4 +1,7 @@
 Client library for Affinity in ruby
 
+Please note that until further notice, the Affinity team
+will no longer support the ruby client library.
+
 For more information please visit http://affinityng.org.
 
